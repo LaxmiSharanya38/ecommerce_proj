@@ -23,3 +23,12 @@ class UserLogin(BaseModel):
 
     email: EmailStr
     password: str
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
+# app/schemas/user_schema.py
+
+
+class DeleteUserRequest(BaseModel):
+    password: str

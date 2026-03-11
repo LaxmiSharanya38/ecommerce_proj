@@ -22,6 +22,11 @@ from app.database import Base
 from app.models import users
 from app.models.address import Address
 from app.models.category import Category
+from app.models.product import Product
+from app.models.inventory import Inventory
+from app.models.cart import Cart
+from app.models.cart_item import CartItem
+from app.models.product_images import ProductImage
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,

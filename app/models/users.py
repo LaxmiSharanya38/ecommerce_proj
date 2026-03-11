@@ -31,3 +31,5 @@ class User(Base):
         back_populates="user",
         cascade="all, delete"
     )
+    # Relationship
+    carts = relationship("Cart", back_populates="user")
