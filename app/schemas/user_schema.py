@@ -27,7 +27,6 @@ class UserLogin(BaseModel):
 class ChangePasswordRequest(BaseModel):
     old_password: str
     new_password: str
-# app/schemas/user_schema.py
 
 
 class DeleteUserRequest(BaseModel):
