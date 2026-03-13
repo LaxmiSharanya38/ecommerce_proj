@@ -25,23 +25,18 @@ class ProductResponse(BaseModel):
         from_attributes = True
 
 
-class ProductUpdate(BaseModel):
+class ProductUpdateItem(BaseModel):
+    sku: str
     name: Optional[str] = None
     description: Optional[str] = None
     category_id: Optional[UUID] = None
     price: Optional[Decimal] = None
-    sku: Optional[str] = None
     is_active: Optional[bool] = None
     quantity_available: Optional[int] = None
     images: Optional[List[str]] = None
 
 
-class ProductResponse(BaseModel):
-    id: UUID
-    name: str
-    description: str
-    price: Decimal
-    is_active: bool
+class BulkProductUpdate(BaseModel):
+    products: List[ProductUpdateItem]
 
-    class Config:
-        from_attributes = True
+

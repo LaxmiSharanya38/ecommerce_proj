@@ -61,27 +61,27 @@ def get_products(
         SELECT id FROM category_tree
     """)
 
-    result = db.execute(
-        recursive_query,
-        {"search": f"%{search}%"}
-    ).fetchall()
+        result = db.execute(
+            recursive_query,
+            {"search": f"%{search}%"}
+        ).fetchall()
 
-    category_ids = [row[0] for row in result]
+        category_ids = [row[0] for row in result]
 
-    similarity_score = func.similarity(
-        Product.name,
-        search
-    )
-
-    query = query.add_columns(
-        similarity_score.label("score")
-    ).filter(
-        or_(
-            Product.name.ilike(f"%{search}%"),
-            Product.category_id.in_(category_ids),
-            similarity_score > 0.3   
+        similarity_score = func.similarity(
+            Product.name,
+            search
         )
-    ).order_by(desc("score"))
+
+        query = query.add_columns(
+            similarity_score.label("score")
+        ).filter(
+            or_(
+                Product.name.ilike(f"%{search}%"),
+                Product.category_id.in_(category_ids),
+                similarity_score > 0.3   
+            )
+        ).order_by(desc("score"))
     if sort == "price_asc":
         query = query.order_by(asc(Product.price))
 
