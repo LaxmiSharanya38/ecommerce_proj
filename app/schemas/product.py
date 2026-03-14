@@ -11,7 +11,7 @@ class ProductCreate(BaseModel):
     price: Decimal
     quantity_available: int = Field(..., ge=0)
     sku:str
-    images: List[str]
+    images: str
 
 
 class ProductResponse(BaseModel):
@@ -33,7 +33,7 @@ class ProductUpdateItem(BaseModel):
     price: Optional[Decimal] = None
     is_active: Optional[bool] = None
     quantity_available: Optional[int] = None
-    images: Optional[List[str]] = None
+    images: Optional[str] = None
 
 
 class BulkProductUpdate(BaseModel):

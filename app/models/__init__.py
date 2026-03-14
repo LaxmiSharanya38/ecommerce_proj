@@ -5,3 +5,10 @@ from .product import Product
 from .category import Category
 from .inventory import Inventory
 from .product_images import ProductImage
+from .orders import Order
+from .orderitem import OrderItem
+from .shipment import Shipment
+from .shipment_tracking import ShipmentTracking
+from .invoice import Invoice
+from .payments import Payment
+from .address import Address

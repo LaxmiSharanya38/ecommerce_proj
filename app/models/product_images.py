@@ -23,7 +23,6 @@ class ProductImage(Base):
 
     image_url = Column(String, nullable=False)
 
-    is_primary = Column(Boolean, default=False)
 
     # Relationship
 

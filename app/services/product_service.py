@@ -20,6 +20,15 @@ def create_product(db: Session, data: ProductCreate):
 
         if not category:
             raise HTTPException(404, "Category not found")
+        existing_product = db.query(Product).filter(
+            Product.sku == data.sku
+        ).first()
+
+        if existing_product:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Product with SKU '{data.sku}' already exists"
+            )
 
         product = Product(
             id=uuid.uuid4(),
@@ -43,16 +52,13 @@ def create_product(db: Session, data: ProductCreate):
 
         db.add(inventory)
 
-        first_image = True
-        for img in data.images:
-            image = ProductImage(
-                id=uuid.uuid4(),
-                product_id=product.id,
-                image_url=img,
-                is_primary=first_image
-            )
-            db.add(image)
-            first_image = False
+        image = ProductImage(
+    id=uuid.uuid4(),
+    product_id=product.id,
+    image_url=data.images
+)
+
+        db.add(image)
 
         db.commit()
         db.refresh(product)
@@ -124,24 +130,19 @@ def bulk_update_products(db: Session, data: BulkProductUpdate):
 
             if item.images is not None:
 
-                db.query(ProductImage).filter(
-                    ProductImage.product_id == product.id
-                ).delete()
+                image = db.query(ProductImage).filter(
+        ProductImage.product_id == product.id
+    ).first()
 
-                first = True
-
-                for img in item.images:
-
+                if image:
+                    image.image_url = item.image
+                else:
                     new_img = ProductImage(
-                        id=uuid.uuid4(),
-                        product_id=product.id,
-                        image_url=img,
-                        is_primary=first
-                    )
-
+            id=uuid.uuid4(),
+            product_id=product.id,
+            image_url=item.images
+        )
                     db.add(new_img)
-
-                    first = False
 
             updated_products.append(product.sku)
 
@@ -218,18 +219,12 @@ def upload_products_service(file: UploadFile, db: Session):
 
             db.add(inventory)
 
-            # images
-            images = str(row["images"]).split("|")
+            image = ProductImage(
+    product_id=product.id,
+    image_url=row["image"]
+)
 
-            for i, img in enumerate(images):
-
-                image = ProductImage(
-                    product_id=product.id,
-                    image_url=img,
-                    is_primary=(i == 0)
-                )
-
-                db.add(image)
+            db.add(image)
 
             inserted_products += 1
 

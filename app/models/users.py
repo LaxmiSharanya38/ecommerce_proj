@@ -33,3 +33,4 @@ class User(Base):
     )
     # Relationship
     carts = relationship("Cart", back_populates="user")
+    orders = relationship("Order", back_populates="user")
