@@ -3,7 +3,8 @@ from sqlalchemy import Column, String, ForeignKey, DateTime, Numeric
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-
+from sqlalchemy import Enum as SQLEnum
+from app.enums.shipment_status import ShipmentStatus
 from app.database import Base
 class Shipment(Base):
     __tablename__ = "shipments"
@@ -19,7 +20,11 @@ class Shipment(Base):
     courier_name = Column(String)  
     tracking_number = Column(String)
 
-    shipment_status = Column(String, default="CREATED")
+    shipment_status = Column(
+    SQLEnum(ShipmentStatus, name="shipment_status_enum"),
+    nullable=False,
+    default=ShipmentStatus.CREATED
+)
 
     shipped_at = Column(DateTime, nullable=True)
     delivered_at = Column(DateTime, nullable=True)
@@ -28,5 +33,6 @@ class Shipment(Base):
     tracking_updates = relationship(
         "ShipmentTracking",
         back_populates="shipment",
-        cascade="all, delete"
+         cascade="all, delete-orphan",
+    order_by="ShipmentTracking.updated_at"
     )

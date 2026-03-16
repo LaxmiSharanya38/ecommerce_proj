@@ -5,7 +5,8 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.database import Base
-
+from sqlalchemy import Enum as SQLEnum
+from app.enums.payment_status import PaymentStatus
 
 class Payment(Base):
     __tablename__ = "payments"
@@ -21,8 +22,11 @@ class Payment(Base):
     provider = Column(String, nullable=False)  
     # example: stripe, razorpay, paypal
 
-    payment_status = Column(String, default="PENDING")
-    # PENDING / SUCCESS / FAILED / REFUNDED
+    payment_status = Column(
+        SQLEnum(PaymentStatus, name="payment_status_enum"),
+    nullable=False,
+    default=PaymentStatus.PENDING
+)
 
     transaction_id = Column(String, nullable=True)
 

@@ -3,9 +3,9 @@ from sqlalchemy import Column, String, ForeignKey, DateTime, Numeric
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-
+from sqlalchemy import Enum as SQLEnum
 from app.database import Base
-
+from app.enums.order_status import OrderStatus
 
 class Order(Base):
     __tablename__ = "orders"
@@ -25,10 +25,10 @@ class Order(Base):
     )
 
     order_status = Column(
-        String,
-        default="PENDING"
-    )
-
+    SQLEnum(OrderStatus, name="order_status_enum"),
+    nullable=False,
+    default=OrderStatus.CREATED)
+    
     total_amount = Column(Numeric(10, 2), nullable=False)
 
     discount_amount = Column(

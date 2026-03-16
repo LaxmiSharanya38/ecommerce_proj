@@ -3,7 +3,8 @@ from sqlalchemy import Column, String, ForeignKey, DateTime, Numeric
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-
+from sqlalchemy import Enum as SQLEnum
+from app.enums.shipmenttracking_status import ShipmentTrackingStatus
 from app.database import Base
 class ShipmentTracking(Base):
     __tablename__ = "shipment_tracking"
@@ -15,7 +16,13 @@ class ShipmentTracking(Base):
         ForeignKey("shipments.id")
     )
 
-    status = Column(String)
+    status = Column(
+    SQLEnum(
+        ShipmentTrackingStatus,
+        name="shipment_tracking_status_enum"
+    ),
+    nullable=False
+)
     location = Column(String)
     updated_at = Column(DateTime, server_default=func.now())
 
