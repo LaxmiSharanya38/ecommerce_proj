@@ -10,7 +10,7 @@ from app.models.payments import Payment
 from app.models.shipment import Shipment
 from app.models.invoice import Invoice
 from uuid import UUID
-from app.enums.order_status import OrderStatus
+from app.enums.order_status import OrderStatus,RefundStatus
 import uuid
 from sqlalchemy.orm import Session,joinedload
 from fastapi import HTTPException
@@ -198,12 +198,15 @@ def get_order_details(
     # ---------- payment ----------
     payment_data = None
     if order.payments:
-        payment_data = {
-            "provider": order.payments.provider,
-            "status": order.payments.payment_status,
-            "transaction_id": order.payments.transaction_id,
-            "amount": float(order.payments.amount)
-        }
+       payment_data = [
+    {
+        "provider": p.provider,
+        "status": p.payment_status,
+        "transaction_id": p.transaction_id,
+        "amount": float(p.amount)
+    }
+    for p in order.payments
+]
 
     # ---------- shipment ----------
     shipment_data = None
@@ -285,47 +288,60 @@ def get_user_orders(
     ]
 def cancel_order(db: Session, user_id, order_id):
 
-    order = db.query(Order).filter(
-        Order.id == order_id,
-        Order.user_id == user_id
-    ).first()
-
-    if not order:
-        raise HTTPException(404, "Order not found")
-
-    if order.order_status not in [
-    OrderStatus.CREATED,
-    OrderStatus.PAYMENT_PENDING
-]:        raise HTTPException(
-            400,
-            "Order cannot be cancelled"
-        )
-
-    # restore inventory
-    order_items = db.query(OrderItem).filter(
-        OrderItem.order_id == order.id
-    ).all()
-
-    for item in order_items:
-
-        inventory = db.query(Inventory).filter(
-            Inventory.product_id == item.product_id
+    try:
+        order = db.query(Order).filter(
+            Order.id == order_id,
+            Order.user_id == user_id
         ).first()
 
-        product = db.query(Product).filter(
-            Product.id == item.product_id
-        ).first()
+        if not order:
+            raise HTTPException(404, "Order not found")
 
-        inventory.quantity_available += item.quantity
+        if order.order_status == OrderStatus.CANCELLED:
+            raise HTTPException(400, "Order already cancelled")
+        if order.order_status in [OrderStatus.SHIPPED, OrderStatus.DELIVERED]:
+            raise HTTPException(400, "Order cannot be cancelled after shipping")
+        if order.refund_status == RefundStatus.PENDING:
+            raise HTTPException(400, "Refund already in process for this order")
 
-        if inventory.quantity_available > 0:
-            product.is_active = True
+        # restore inventory
+        order_items = db.query(OrderItem).filter(
+            OrderItem.order_id == order.id
+        ).all()
 
-    # update order status
-    order.order_status = "CANCELLED"
-    order.cancelled_at = datetime.utcnow()
+        for item in order_items:
 
-    db.commit()
+            inventory = db.query(Inventory).filter(
+                Inventory.product_id == item.product_id
+            ).first()
 
-    return {"message": "Order cancelled successfully"}
+            product = db.query(Product).filter(
+                Product.id == item.product_id
+            ).first()
+
+            inventory.quantity_available += item.quantity
+
+            if inventory.quantity_available > 0:
+                product.is_active = True
+
+        # Save original status before updating
+        original_status = order.order_status
+
+        # Update order status
+        order.order_status = OrderStatus.CANCELLED
+        order.cancelled_at = datetime.utcnow()
+
+        # If paid, trigger refund workflow
+        if original_status == OrderStatus.PAID:
+            order.refund_status = RefundStatus.PENDING
+            # Later, refund API will pick this up and process it
+
+        db.commit()
+
+        return {"message": "Order cancelled successfully"}
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(500, f"Failed to cancel order: {str(e)}")
 

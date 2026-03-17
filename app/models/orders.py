@@ -5,7 +5,7 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy import Enum as SQLEnum
 from app.database import Base
-from app.enums.order_status import OrderStatus
+from app.enums.order_status import OrderStatus,RefundStatus
 
 class Order(Base):
     __tablename__ = "orders"
@@ -49,6 +49,12 @@ class Order(Base):
     updated_at = Column(
         DateTime,
         onupdate=func.now()
+    )
+    cancelled_at = Column(DateTime, nullable=True)
+    refund_status = Column(
+        SQLEnum(RefundStatus, name="refund_status_enum"),
+        nullable=False,
+        default=RefundStatus.NONE
     )
 
     # relationships
