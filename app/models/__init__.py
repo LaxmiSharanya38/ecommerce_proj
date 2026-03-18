@@ -12,3 +12,5 @@ from .shipment_tracking import ShipmentTracking
 from .invoice import Invoice
 from .payments import Payment
 from .address import Address
+from .coupon import Coupon
+from .coupon_usage import CouponUsage

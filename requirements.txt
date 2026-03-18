@@ -11,3 +11,4 @@ sqlalchemy==2.0.46
 alembic
 pwdlib[argon2]
 pandas
+razorpay
