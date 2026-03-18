@@ -35,7 +35,13 @@ class Order(Base):
         Numeric(10, 2),
         default=0
     )
+    coupon_id = Column(
+    UUID(as_uuid=True),
+    ForeignKey("coupons.id"),
+    nullable=True
+)
 
+    coupon_code = Column(String, nullable=True)
     final_amount = Column(
         Numeric(10, 2),
         nullable=False
@@ -85,4 +91,9 @@ class Order(Base):
         uselist=False
     )
 
-
+    coupon = relationship("Coupon", back_populates="orders")
+    coupon_usage = relationship(
+    "CouponUsage",
+    back_populates="order",
+    uselist=False
+)

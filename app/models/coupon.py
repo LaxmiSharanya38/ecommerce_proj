@@ -55,3 +55,4 @@ class Coupon(Base):
         back_populates="coupon",
         cascade="all, delete-orphan"
     )
+    orders = relationship("Order", back_populates="coupon")

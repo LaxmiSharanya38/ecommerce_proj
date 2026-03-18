@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-
+from app.models.coupon import Coupon
+from datetime import date
+from decimal import Decimal
 from app.database import get_db
 from app.models.cart import Cart
 from app.models.cart_item import CartItem
@@ -8,7 +10,8 @@ from app.models.product import Product
 from app.models.inventory import Inventory
 from app.schemas.cart import AddMultipleToCartRequest,UpdateCartItemRequest
 from app.utils.dependencies import get_current_user
-
+from app.services.cart_service import apply_coupon_to_cart,remove_coupon_from_cart
+from app.schemas.coupon_schema import ApplyCouponRequest
 router = APIRouter(prefix="/cart", tags=["Cart"])
 
 
@@ -213,3 +216,22 @@ def get_cart_items(
         "cart_items": response_items,
         "total_amount": float(total_amount)
     }
+@router.post("/apply-coupon")
+def apply_coupon(
+    data: ApplyCouponRequest,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    return apply_coupon_to_cart(
+        db,
+        current_user.id,
+        data.coupon_code
+    )
+
+
+@router.delete("/remove-coupon")
+def remove_coupon(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    return remove_coupon_from_cart(db, current_user.id)

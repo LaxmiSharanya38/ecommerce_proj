@@ -38,3 +38,5 @@ class CouponResponse(BaseModel):
 
     class Config:
         from_attributes = True
+class ApplyCouponRequest(BaseModel):
+    coupon_code: str

@@ -8,7 +8,7 @@ from app.schemas.coupon_schema import CouponCreate, CouponUpdate
 from datetime import date
 from decimal import Decimal
 from app.enums.discount_enum import DiscountType
-
+from app.models.cart import Cart
 def create_coupon(db: Session, data: CouponCreate) -> Coupon:
     existing = (
         db.query(Coupon)
@@ -88,6 +88,7 @@ def disable_coupon(db: Session, coupon_id: UUID) -> Coupon:
     db.refresh(coupon)
 
     return coupon
+
 def validate_coupon(
     db: Session,
     coupon_code: str,
@@ -95,6 +96,28 @@ def validate_coupon(
     cart_total
 ):
 
+    # ----------------------------
+    # Check cart first
+    # ----------------------------
+    cart = (
+        db.query(Cart)
+        .filter(Cart.user_id == user_id)
+        .first()
+    )
+
+    if not cart:
+        raise HTTPException(404, "Cart not found")
+
+    # Only ONE coupon allowed per cart
+    if cart.coupon_id is not None:
+        raise HTTPException(
+            400,
+            "A coupon is already applied. Remove it before applying another."
+        )
+
+    # ----------------------------
+    # Fetch coupon
+    # ----------------------------
     coupon = (
         db.query(Coupon)
         .filter(Coupon.code == coupon_code)
@@ -104,6 +127,9 @@ def validate_coupon(
     if not coupon:
         raise HTTPException(404, "Invalid coupon")
 
+    # ----------------------------
+    # Coupon validations
+    # ----------------------------
     if not coupon.is_active:
         raise HTTPException(400, "Coupon is inactive")
 
@@ -116,7 +142,11 @@ def validate_coupon(
             f"Minimum order amount is {coupon.min_order_amount}"
         )
 
+    # ----------------------------
+    # Global usage limit
+    # ----------------------------
     if coupon.usage_limit is not None:
+
         total_usage = (
             db.query(CouponUsage)
             .filter(CouponUsage.coupon_id == coupon.id)
@@ -124,8 +154,14 @@ def validate_coupon(
         )
 
         if total_usage >= coupon.usage_limit:
-            raise HTTPException(400, "Coupon usage limit reached")
+            raise HTTPException(
+                400,
+                "Coupon usage limit reached"
+            )
 
+    # ----------------------------
+    # One coupon per user (lifetime)
+    # ----------------------------
     user_usage = (
         db.query(CouponUsage)
         .filter(
@@ -136,7 +172,10 @@ def validate_coupon(
     )
 
     if user_usage > 0:
-        raise HTTPException(400, "Coupon already used")
+        raise HTTPException(
+            400,
+            "Coupon already used by this user"
+        )
 
     return coupon
 
@@ -163,25 +202,3 @@ def calculate_discount(coupon, cart_total: Decimal):
     }
 
 
-
-def apply_coupon_to_cart(
-    db,
-    coupon_code,
-    user_id,
-    cart_total
-):
-
-    coupon = validate_coupon(
-        db,
-        coupon_code,
-        user_id,
-        cart_total
-    )
-
-    pricing = calculate_discount(coupon, cart_total)
-
-    return {
-        "coupon_code": coupon.code,
-        "discount": pricing["discount"],
-        "final_total": pricing["final_total"]
-    }

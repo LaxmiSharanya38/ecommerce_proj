@@ -1,15 +1,19 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey
+from sqlalchemy import Column, DateTime, ForeignKey,Index
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-
+from sqlalchemy import UniqueConstraint
 from app.database import Base
 
 
 class CouponUsage(Base):
     __tablename__ = "coupon_usage"
+    __table_args__ = (
+    UniqueConstraint("order_id", name="uq_coupon_usage_order"),
+    Index("idx_coupon_user", "coupon_id", "user_id"),
+)
 
     id = Column(
         UUID(as_uuid=True),

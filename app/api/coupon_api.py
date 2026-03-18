@@ -10,7 +10,7 @@ from app.services.coupon_service import (
     list_coupons,
     get_coupon,
     update_coupon,
-    disable_coupon,apply_coupon_to_cart
+    disable_coupon
 )
 from app.schemas.coupon_schema import (
     CouponCreate,
@@ -49,17 +49,3 @@ def disable_coupon_api(
     user = Depends(get_current_user)
 ):
     return disable_coupon(db, coupon_id)
-@router.post("/apply")
-def apply_coupon(
-    coupon_code: str,
-    cart_total: float,
-    db: Session = Depends(get_db),
-    user = Depends(get_current_user)
-):
-
-    return apply_coupon_to_cart(
-        db=db,
-        coupon_code=coupon_code,
-        user_id=user.id,
-        cart_total=cart_total
-    )

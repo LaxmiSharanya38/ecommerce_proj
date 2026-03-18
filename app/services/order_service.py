@@ -16,128 +16,98 @@ from sqlalchemy.orm import Session,joinedload
 from fastapi import HTTPException
 from datetime import datetime
 from sqlalchemy import func
+from app.models.coupon import Coupon
+from decimal import Decimal
+from datetime import date
+from app.services.coupon_service import validate_coupon
+from app.models.coupon_usage import CouponUsage
+
 
 def create_order_from_cart(db: Session, user_id, address_id):
 
     try:
 
-        # Validate address
         address = db.query(Address).filter(
             Address.id == address_id,
             Address.user_id == user_id
         ).first()
 
         if not address:
-            raise HTTPException(
-                status_code=404,
-                detail="Address not found"
-            )
+            raise HTTPException(404, "Address not found")
 
-        # Get cart
         cart = db.query(Cart).filter(
             Cart.user_id == user_id
         ).first()
 
         if not cart:
-            raise HTTPException(
-                status_code=400,
-                detail="Cart not found"
-            )
+            raise HTTPException(400, "Cart not found")
 
         cart_items = db.query(CartItem).filter(
             CartItem.cart_id == cart.id
         ).all()
 
         if not cart_items:
-            raise HTTPException(
-                status_code=400,
-                detail="Cart is empty"
+            raise HTTPException(400, "Cart empty")
+
+        coupon = cart.coupon
+
+        if coupon:
+            validate_coupon(
+                db,
+                coupon.code,
+                user_id,
+                cart.total_amount
             )
 
-        #  Calculate totals
-        total_amount = 0
-        order_items_data = []
+        total_amount = cart.total_amount
+        discount_amount = cart.discount_amount or 0
+        final_amount = cart.final_amount or total_amount
 
-        for item in cart_items:
-
-            product = db.query(Product).filter(
-                Product.id == item.product_id
-            ).first()
-
-            inventory = db.query(Inventory).filter(
-                Inventory.product_id == product.id
-            ).first()
-
-            if not inventory:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Inventory missing for product {product.id}"
-                )
-
-            # verify reserved stock
-            if inventory.reserved_quantity < item.quantity:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Stock reservation mismatch for {product.name}"
-                )
-
-            subtotal = item.price_at_time * item.quantity
-            total_amount += subtotal
-
-            order_items_data.append({
-                "product": product,
-                "quantity": item.quantity,
-                "price": item.price_at_time,
-                "subtotal": subtotal,
-                "inventory": inventory
-            })
-
-        # Create order
         order = Order(
             id=uuid.uuid4(),
             user_id=user_id,
             address_id=address_id,
             order_status=OrderStatus.CREATED,
             total_amount=total_amount,
-            discount_amount=0,
-            final_amount=total_amount,
+            discount_amount=discount_amount,
+            final_amount=final_amount,
+            coupon_id=cart.coupon_id,
+            coupon_code=coupon.code if coupon else None,
             created_at=datetime.utcnow()
         )
 
         db.add(order)
         db.flush()
 
-        # Create order items
-        for data in order_items_data:
+        for item in cart_items:
+
             order_item = OrderItem(
                 id=uuid.uuid4(),
                 order_id=order.id,
-                product_id=data["product"].id,
-                quantity=data["quantity"],
-                price=data["price"],
-                subtotal=data["subtotal"]
+                product_id=item.product_id,
+                quantity=item.quantity,
+                price=item.price_at_time,
+                subtotal=item.price_at_time * item.quantity
             )
 
             db.add(order_item)
 
-            inventory = data["inventory"]
-
-            inventory.reserved_quantity -= data["quantity"]
-            inventory.quantity_available -= data["quantity"]
-
-            remaining_stock = (
-                inventory.quantity_available - inventory.reserved_quantity
+        if coupon:
+            usage = CouponUsage(
+                user_id=user_id,
+                coupon_id=coupon.id,
+                order_id=order.id
             )
+            db.add(usage)
 
-            if remaining_stock <= 0:
-                data["product"].is_active = False
-
-        #Clear cart
         db.query(CartItem).filter(
             CartItem.cart_id == cart.id
         ).delete()
 
-        # Commit transaction
+        cart.coupon_id = None
+        cart.discount_amount = 0
+        cart.final_amount = None
+
         db.commit()
         db.refresh(order)
 
@@ -227,18 +197,20 @@ def get_order_details(
         }
 
     # ---------- final response ----------
+    
     return {
-        "order_id": order.id,
-        "order_status": order.order_status,
-        "total_amount": float(order.total_amount),
-        "discount_amount": float(order.discount_amount),
-        "final_amount": float(order.final_amount),
-        "created_at": order.created_at,
-        "items": items,
-        "payment": payment_data,
-        "shipment": shipment_data,
-        "invoice": invoice_data
-    }
+    "order_id": order.id,
+    "order_status": order.order_status,
+    "total_amount": float(order.total_amount),
+    "discount_amount": float(order.discount_amount),
+    "final_amount": float(order.final_amount),
+    "coupon_code": order.coupon_code,
+    "created_at": order.created_at,
+    "items": items,
+    "payment": payment_data,
+    "shipment": shipment_data,
+    "invoice": invoice_data
+}
 def update_order_status(db: Session, order_id: int, new_status: OrderStatus):
 
     order = db.query(Order).filter(Order.id == order_id).first()
@@ -299,12 +271,23 @@ def cancel_order(db: Session, user_id, order_id):
 
         if order.order_status == OrderStatus.CANCELLED:
             raise HTTPException(400, "Order already cancelled")
-        if order.order_status in [OrderStatus.SHIPPED, OrderStatus.DELIVERED]:
-            raise HTTPException(400, "Order cannot be cancelled after shipping")
-        if order.refund_status == RefundStatus.PENDING:
-            raise HTTPException(400, "Refund already in process for this order")
 
-        # restore inventory
+        if order.order_status in [
+            OrderStatus.SHIPPED,
+            OrderStatus.DELIVERED
+        ]:
+            raise HTTPException(
+                400,
+                "Order cannot be cancelled after shipping"
+            )
+
+        if order.refund_status == RefundStatus.PENDING:
+            raise HTTPException(
+                400,
+                "Refund already in process for this order"
+            )
+
+        # ---------- RESTORE INVENTORY ----------
         order_items = db.query(OrderItem).filter(
             OrderItem.order_id == order.id
         ).all()
@@ -324,24 +307,34 @@ def cancel_order(db: Session, user_id, order_id):
             if inventory.quantity_available > 0:
                 product.is_active = True
 
-        # Save original status before updating
+        # ---------- RESTORE COUPON USAGE ----------
+        usage = db.query(CouponUsage).filter(
+            CouponUsage.order_id == order.id
+        ).first()
+
+        if usage:
+            db.delete(usage)
+            # usage_limit auto restored because count reduces
+
+        # ---------- UPDATE ORDER STATUS ----------
         original_status = order.order_status
 
-        # Update order status
         order.order_status = OrderStatus.CANCELLED
         order.cancelled_at = datetime.utcnow()
 
-        # If paid, trigger refund workflow
         if original_status == OrderStatus.PAID:
             order.refund_status = RefundStatus.PENDING
-            # Later, refund API will pick this up and process it
 
         db.commit()
 
         return {"message": "Order cancelled successfully"}
+
     except HTTPException as he:
         raise he
+
     except Exception as e:
         db.rollback()
-        raise HTTPException(500, f"Failed to cancel order: {str(e)}")
-
+        raise HTTPException(
+            500,
+            f"Failed to cancel order: {str(e)}"
+        )
